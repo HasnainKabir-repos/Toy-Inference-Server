@@ -1,4 +1,5 @@
 import time
+import threading
 from collections import deque
 from dataclasses import dataclass, field
 from transformers.cache_utils import DynamicCache
@@ -42,6 +43,7 @@ class Request:
     decode_time: float = 0.0
 
     decode_steps: int = 0
+    done_event: threading.Event = field(default_factory=threading.Event)
 
     @property
     def waiting_time(self):
@@ -71,20 +73,25 @@ class Request:
 class RequestQueue:
     def __init__(self):
         self.queue = deque()
+        self.lock = threading.Lock()
 
     def add(self, request):
-        self.queue.append(request)
+        with self.lock:
+            self.queue.append(request)
 
     def pop(self):
-        if not self.queue:
-            return None    
-        return self.queue.popleft()
+        with self.lock:
+            if not self.queue:
+                return None    
+            return self.queue.popleft()
 
     def empty(self):
-        return len(self.queue) == 0
+        with self.lock:
+            return len(self.queue) == 0
 
     def __len__(self):
-        return len(self.queue)
+        with self.lock:
+            return len(self.queue)
 
 
 class ActiveBatch:
@@ -367,6 +374,7 @@ class ContinuousBatchEngine:
             if request.done:
                 request.finish_time = time.perf_counter()
                 self.completed_requests.append(request)
+                request.done_event.set()
 
             else:
                 remaining_requests.append(request)
