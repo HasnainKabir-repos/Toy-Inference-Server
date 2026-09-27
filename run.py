@@ -237,7 +237,7 @@ class ContinuousBatchEngine:
         if not requests:
             return
 
-        cache_manager = KVCacheManager(self.model)
+        cache_manager = self.cache_manager
         current_request_ids = [r.request_id for r in requests]
         past_is_none = self.active_batch.past_key_values is None
         ids_differ = self.active_batch.cached_request_ids != current_request_ids
@@ -320,14 +320,15 @@ class ContinuousBatchEngine:
 
         updated_cache = outputs.past_key_values
         self.active_batch.past_key_values = updated_cache
-        self.active_batch.cached_request_ids = [r.request_id for r in requests]
+        self.active_batch.cached_request_ids = current_request_ids
 
-        for i, request in enumerate(requests):
-            request.past_key_values = cache_manager.extract_single_request_cache(
-                updated_cache,
-                i,
-                request.cache_length
-            )
+        if not self.waiting_queue.empty():
+            for i, request in enumerate(requests):
+                request.past_key_values = cache_manager.extract_single_request_cache(
+                    updated_cache,
+                    i,
+                    request.cache_length
+                )
 
     def decode_request(self, request:Request):
         """ 
@@ -730,6 +731,9 @@ if __name__ == "__main__":
     max_new_tokens = [ 15, 50, 20, 50, 30, 50, 10, 50 ]
 
     tokenizer, model = load_quantized_model()
+
+    print(f"Model device: {next(model.parameters()).device}")
+    print(f"CUDA available: {torch.cuda.is_available()}")
 
     single_result, single_wall_time, single_throughput = (
         run_single_request_benchmark(
