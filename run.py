@@ -4,18 +4,30 @@ from collections import deque
 from dataclasses import dataclass, field
 from transformers.cache_utils import DynamicCache
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 MODEL_NAME = "Qwen/Qwen3-0.6B"
 MAX_BATCH_SIZE = 4
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    device_map="auto",
-    torch_dtype="auto"
-)
-model.eval()
+def load_quantized_model():
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+
+    quant_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_use_double_quant=True
+    )
+
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME,
+        device_map="auto",
+        torch_dtype="auto",
+        quantization_config=quant_config
+    )
+    model.eval()
+
+    return tokenizer, model
 
 @dataclass
 class Request:
@@ -651,6 +663,57 @@ def print_results(results: list[Request]):
         print(f"Decode time: {request.decode_time:.4f}s")
         print(f"Total time: {request.total_time:.4f}s")
 
+def run_single_request_benchmark(
+    model,
+    tokenizer,
+    prompt: str,
+    max_new_tokens: int
+):
+    engine = ContinuousBatchEngine(
+        model=model,
+        tokenizer=tokenizer,
+        max_batch_size=MAX_BATCH_SIZE
+    )
+
+    request = Request(
+        request_id=1,
+        prompt=prompt,
+        max_new_tokens=max_new_tokens
+    )
+
+    engine.add_request(request)
+    benchmark_start = time.perf_counter()
+    results = engine.run()
+
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    benchmark_end = time.perf_counter()
+    wall_time = benchmark_end - benchmark_start
+    result = results[0]
+
+    throughput = (
+        result.generated_token_count / wall_time
+        if wall_time > 0
+        else 0
+    )
+
+    print()
+    print("=" * 70)
+    print("SINGLE REQUEST BENCHMARK")
+    print("=" * 70)
+
+    print(f"Prompt: {result.prompt}") 
+    print(f"Generated tokens: {result.generated_token_count}") 
+    print(f"Finish reason: {result.finish_reason}") 
+    print(f"TTFT: {result.ttft:.4f}s") 
+    print(f"Decode time: {result.decode_time:.4f}s") 
+    print(f"Total time: {result.total_time:.4f}s") 
+    print(f"Wall-clock time: {wall_time:.4f}s") 
+    print(f"Throughput: {throughput:.2f} token/s")
+
+    return results, wall_time, throughput
+
 
 if __name__ == "__main__":
     prompts = [ 
@@ -665,6 +728,17 @@ if __name__ == "__main__":
     ]
 
     max_new_tokens = [ 15, 50, 20, 50, 30, 50, 10, 50 ]
+
+    tokenizer, model = load_quantized_model()
+
+    single_result, single_wall_time, single_throughput = (
+        run_single_request_benchmark(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompts[1],
+            max_new_tokens=max_new_tokens[1]
+        )
+    )
 
     engine = ContinuousBatchEngine(
         model=model,
@@ -681,8 +755,15 @@ if __name__ == "__main__":
 
         engine.add_request(request)
 
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
     benchmark_start = time.perf_counter()
     results = engine.run()
+    
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
     benchmark_end = time.perf_counter()
 
     wall_time = (
@@ -692,7 +773,7 @@ if __name__ == "__main__":
     print_results(results)
     print()
     print("=" * 70)
-    print("SYSTEM METRIC")
+    print("CONTINUOUS BATCHING SYSTEM METRIC")
     print("=" * 70)
 
     total_tokens = sum(
@@ -716,3 +797,30 @@ if __name__ == "__main__":
     print(f"Wall-clock time: {wall_time:.4f}")
     print(f"Sum of per-request decode time: {total_decode_time}")
     print(f"System throughput: {throughput:.2f} token/s")
+
+    # COMPARISON
+    print()
+    print("=" * 70)
+    print("BENCHMARK COMPARISON")
+    print("=" * 70)
+
+    print( 
+        f"Single-request throughput: " 
+        f"{single_throughput:.2f} token/s" 
+    ) 
+
+    print( 
+        f"Continuous-batch throughput: " 
+        f"{throughput:.2f} token/s" 
+    )
+
+    batching_speedup = (
+        throughput / single_throughput
+        if single_throughput > 0
+        else 0
+    )
+
+    print(
+        f"Batching throughput ratio: "
+        f"{batching_speedup:.2f}x"
+    )
