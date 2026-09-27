@@ -29,6 +29,19 @@ def load_quantized_model():
 
     return tokenizer, model
 
+def load_fp16_model():
+    """Same-hardware baseline: identical load path, no quantization."""
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME,
+        device_map="auto",
+        torch_dtype=torch.float16,
+    )
+    model.eval()
+
+    return tokenizer, model
+
 @dataclass
 class Request:
     request_id: int
@@ -75,8 +88,7 @@ class Request:
     def generated_token_count(self):
         return len(self.generated_tokens)
 
-    @property
-    def text(self):
+    def text(self, tokenizer):
         return tokenizer.decode(
             self.generated_tokens,
             skip_special_tokens = True
@@ -646,7 +658,7 @@ class KVCacheManager:
 
         return single_cache
         
-def print_results(results: list[Request]):
+def print_results(results: list[Request], tokenizer):
     print() 
     print("=" * 70) 
     print("RESULTS") 
@@ -656,7 +668,7 @@ def print_results(results: list[Request]):
         print()
         print(f"Request {request.request_id}")
         print(f"Prompt: {request.prompt}")
-        print(f"Output: {request.text!r}")
+        print(f"Output: {request.text(tokenizer)!r}")
         print(f"Generated tokens: {request.generated_token_count}")
         print(f"Finish reason: {request.finish_reason}")
         print(f"Waiting time: {request.waiting_time:.4f}s")
@@ -716,34 +728,7 @@ def run_single_request_benchmark(
     return results, wall_time, throughput
 
 
-if __name__ == "__main__":
-    prompts = [ 
-        "The capital of France is", 
-        "Explain what a CPU does.", 
-        "The history of artificial intelligence can be traced back to", 
-        "What is the difference between RAM and storage?", 
-        "In machine learning, gradient descent is used to", 
-        "Explain how a transformer model works in detail.", 
-        "The capital of Japan is", 
-        "Why is the sky blue?", 
-    ]
-
-    max_new_tokens = [ 15, 50, 20, 50, 30, 50, 10, 50 ]
-
-    tokenizer, model = load_quantized_model()
-
-    print(f"Model device: {next(model.parameters()).device}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
-
-    single_result, single_wall_time, single_throughput = (
-        run_single_request_benchmark(
-            model=model,
-            tokenizer=tokenizer,
-            prompt=prompts[1],
-            max_new_tokens=max_new_tokens[1]
-        )
-    )
-
+def run_batched_benchmark(model, tokenizer, prompts, max_new_tokens):
     engine = ContinuousBatchEngine(
         model=model,
         tokenizer=tokenizer,
@@ -751,80 +736,97 @@ if __name__ == "__main__":
     )
 
     for i, prompt in enumerate(prompts):
-        request = Request(
-            request_id=i+1,
+        engine.add_request(Request(
+            request_id=i + 1,
             prompt=prompt,
             max_new_tokens=max_new_tokens[i]
-        )
-
-        engine.add_request(request)
+        ))
 
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 
     benchmark_start = time.perf_counter()
     results = engine.run()
-    
+
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 
-    benchmark_end = time.perf_counter()
+    wall_time = time.perf_counter() - benchmark_start
+    total_tokens = sum(r.generated_token_count for r in results)
+    throughput = total_tokens / wall_time if wall_time > 0 else 0
 
-    wall_time = (
-        benchmark_end - benchmark_start
-    )
-
-    print_results(results)
+    print_results(results, tokenizer)
     print()
     print("=" * 70)
     print("CONTINUOUS BATCHING SYSTEM METRIC")
     print("=" * 70)
-
-    total_tokens = sum(
-        request.generated_token_count
-        for request in results
-    )
-
-    total_decode_time = sum(
-        request.decode_time
-        for request in results
-    )
-
-    throughput = (
-        total_tokens / wall_time
-        if wall_time > 0
-        else 0
-    )
-
     print(f"Requests: {len(results)}")
     print(f"Max batch size: {MAX_BATCH_SIZE}")
     print(f"Wall-clock time: {wall_time:.4f}")
-    print(f"Sum of per-request decode time: {total_decode_time}")
     print(f"System throughput: {throughput:.2f} token/s")
 
-    # COMPARISON
+    return throughput
+
+
+def run_precision_pass(label, load_fn, prompts, max_new_tokens, single_trials=3):
+    print()
+    print("#" * 70)
+    print(f"# {label}")
+    print("#" * 70)
+
+    tokenizer, model = load_fn()
+    print(f"Model device: {next(model.parameters()).device}")
+
+    single_throughputs = []
+    for trial in range(single_trials):
+        _, _, t = run_single_request_benchmark(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompts[1],
+            max_new_tokens=max_new_tokens[1],
+        )
+        single_throughputs.append(t)
+
+    avg_single = sum(single_throughputs) / len(single_throughputs)
+    print(f"\n[{label}] single-request trials: "
+          f"{[f'{t:.2f}' for t in single_throughputs]} -> avg {avg_single:.2f} tok/s")
+
+    batched_throughput = run_batched_benchmark(model, tokenizer, prompts, max_new_tokens)
+
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    return avg_single, batched_throughput
+
+
+if __name__ == "__main__":
+    prompts = [
+        "The capital of France is",
+        "Explain what a CPU does.",
+        "The history of artificial intelligence can be traced back to",
+        "What is the difference between RAM and storage?",
+        "In machine learning, gradient descent is used to",
+        "Explain how a transformer model works in detail.",
+        "The capital of Japan is",
+        "Why is the sky blue?",
+    ]
+    max_new_tokens = [15, 50, 20, 50, 30, 50, 10, 50]
+
+    print(f"CUDA available: {torch.cuda.is_available()}")
+
+    fp16_single, fp16_batched = run_precision_pass(
+        "FP16 (baseline)", load_fp16_model, prompts, max_new_tokens
+    )
+    nf4_single, nf4_batched = run_precision_pass(
+        "NF4", load_quantized_model, prompts, max_new_tokens
+    )
+
     print()
     print("=" * 70)
-    print("BENCHMARK COMPARISON")
+    print("SAME-HARDWARE, SAME-ENGINE COMPARISON")
     print("=" * 70)
-
-    print( 
-        f"Single-request throughput: " 
-        f"{single_throughput:.2f} token/s" 
-    ) 
-
-    print( 
-        f"Continuous-batch throughput: " 
-        f"{throughput:.2f} token/s" 
-    )
-
-    batching_speedup = (
-        throughput / single_throughput
-        if single_throughput > 0
-        else 0
-    )
-
-    print(
-        f"Batching throughput ratio: "
-        f"{batching_speedup:.2f}x"
-    )
+    print(f"single-request: FP16 {fp16_single:.2f} tok/s  ->  NF4 {nf4_single:.2f} tok/s "
+          f"({nf4_single / fp16_single:.2f}x)")
+    print(f"batched:        FP16 {fp16_batched:.2f} tok/s  ->  NF4 {nf4_batched:.2f} tok/s "
+          f"({nf4_batched / fp16_batched:.2f}x)")
