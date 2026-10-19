@@ -182,6 +182,15 @@ class ContinuousBatchEngine:
         Move requests from the waiting queue into the active batch.
         A newly admitted request performs PREFILL here. 
         """
+        if (not self.active_batch.is_full
+                and not self.waiting_queue.empty()
+                and self.active_batch.past_key_values is not None
+                and self.active_batch.requests):
+            shared = self.active_batch.past_key_values
+            for i, r in enumerate(self.active_batch.requests):
+                r.past_key_values = self.cache_manager.extract_single_request_cache(
+                    shared, i, r.cache_length
+                )
 
         while(
             not self.active_batch.is_full and
@@ -400,10 +409,19 @@ class ContinuousBatchEngine:
                 request.finish_time = time.perf_counter()
                 self.completed_requests.append(request)
                 request.done_event.set()
-
             else:
                 remaining_requests.append(request)
                 remaining_indices.append(i)
+
+        shared = self.active_batch.past_key_values
+        if (shared is not None
+                and remaining_indices
+                and len(remaining_indices) < len(old_requests)):
+            for i in remaining_indices:
+                r = old_requests[i]
+                r.past_key_values = self.cache_manager.extract_single_request_cache(
+                    shared, i, r.cache_length
+                )
 
         if self.active_batch.past_key_values is not None:
             if remaining_indices:
@@ -412,14 +430,12 @@ class ContinuousBatchEngine:
                     dtype=torch.long,
                     device=self.model.device
                 )
-
                 self.active_batch.past_key_values.batch_select_indices(indices)
-
             else:
                 self.active_batch.past_key_values = None
 
         self.active_batch.requests = remaining_requests
-
+    
     def run(self):
         """ Main continuous batching scheduler. """
 

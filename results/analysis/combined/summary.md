@@ -1,0 +1,34 @@
+| workload | arrival | system | cap | tok/s (±95% CI) | TTFT p50 | e2e p50 | e2e p99 | occupancy | rebuild+extract % | match vs seq |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mixed | offline | continuous_batched | 4 | 17.82 ± 3.25 | 22.42 | 37.22 | 76.25 | 3.7 | 7.0 | 97% |
+| mixed | offline | continuous_unbatched | 4 | 9.30 ± 0.14 | 47.14 | 74.04 | 135.96 | 3.7 | 0.0 | 100% |
+| mixed | offline | sequential | 1 | 9.23 ± 0.50 | 63.28 | 68.83 | 135.52 | 1.0 | 0.0 | 100% |
+| mixed | offline | static | 4 | 13.32 ± 6.33 | 36.33 | 48.53 | 97.64 | 2.1 | 0.0 | 100% |
+| mixed | poisson@1.0 | continuous_batched | 4 | 9.48 ± 5.96 | 0.25 | 5.59 | 20.70 | 1.6 | 0.7 | 96% |
+| mixed | poisson@1.0 | continuous_unbatched | 4 | 8.20 ± 2.21 | 0.33 | 12.28 | 83.45 | 2.1 | 0.0 | 100% |
+| mixed | poisson@1.0 | sequential | 1 | 8.21 ± 2.22 | 6.92 | 13.27 | 52.43 | 1.0 | 0.0 | 100% |
+| mixed | poisson@1.0 | static | 4 | 9.19 ± 5.57 | 3.66 | 11.93 | 40.71 | 1.3 | 0.0 | 100% |
+| mixed | poisson@2.0 | continuous_batched | 4 | 15.98 ± 4.37 | 0.35 | 8.85 | 39.85 | 2.6 | 3.5 | 92% |
+| mixed | poisson@2.0 | continuous_unbatched | 4 | 8.94 ± 1.37 | 18.25 | 42.24 | 107.73 | 3.3 | 0.0 | 100% |
+| mixed | poisson@2.0 | sequential | 1 | 9.23 ± 0.26 | 27.58 | 38.42 | 87.89 | 1.0 | 0.0 | 100% |
+| mixed | poisson@2.0 | static | 4 | 12.05 ± 5.20 | 13.74 | 27.60 | 53.90 | 1.7 | 0.0 | 100% |
+| mixed | poisson@3.0 | continuous_batched | 4 | 16.85 ± 2.14 | 5.81 | 14.16 | 56.94 | 3.2 | 6.0 | 99% |
+| mixed | poisson@3.0 | continuous_unbatched | 4 | 9.23 ± 0.08 | 26.76 | 50.58 | 116.81 | 3.6 | 0.0 | 100% |
+| mixed | poisson@3.0 | sequential | 1 | 9.23 ± 0.49 | 39.80 | 45.42 | 103.18 | 1.0 | 0.0 | 100% |
+| mixed | poisson@3.0 | static | 4 | 11.86 ± 5.03 | 22.47 | 40.85 | 64.00 | 1.8 | 0.0 | 100% |
+| uniform | offline | continuous_batched | 4 | 20.99 ± 0.46 | 23.81 | 32.40 | 55.43 | 4.0 | 5.6 | 100% |
+| uniform | offline | continuous_unbatched | 4 | 9.24 ± 0.28 | 52.48 | 72.56 | 125.94 | 4.0 | 0.0 | 100% |
+| uniform | offline | sequential | 1 | 9.27 ± 0.23 | 59.43 | 64.31 | 124.90 | 1.0 | 0.0 | 100% |
+| uniform | offline | static | 4 | 22.56 ± 1.25 | 22.56 | 29.89 | 52.42 | 4.0 | 0.0 | 100% |
+| uniform | poisson@1.0 | continuous_batched | 4 | 9.32 ± 6.45 | 0.28 | 6.20 | 10.34 | 1.7 | 0.5 | 96% |
+| uniform | poisson@1.0 | continuous_unbatched | 4 | 8.20 ± 2.57 | 0.41 | 19.92 | 52.75 | 2.6 | 0.0 | 100% |
+| uniform | poisson@1.0 | sequential | 1 | 8.24 ± 2.58 | 8.47 | 13.55 | 42.10 | 1.0 | 0.0 | 100% |
+| uniform | poisson@1.0 | static | 4 | 9.33 ± 5.35 | 2.49 | 7.73 | 11.93 | 1.4 | 0.0 | 100% |
+| uniform | poisson@2.0 | continuous_batched | 4 | 16.20 ± 7.63 | 0.37 | 8.62 | 22.42 | 2.8 | 3.1 | 94% |
+| uniform | poisson@2.0 | continuous_unbatched | 4 | 9.17 ± 0.20 | 24.79 | 45.43 | 81.35 | 3.7 | 0.0 | 100% |
+| uniform | poisson@2.0 | sequential | 1 | 8.95 ± 0.80 | 32.18 | 37.21 | 79.06 | 1.0 | 0.0 | 100% |
+| uniform | poisson@2.0 | static | 4 | 16.68 ± 7.82 | 4.50 | 10.90 | 21.29 | 2.4 | 0.0 | 100% |
+| uniform | poisson@3.0 | continuous_batched | 4 | 18.78 ± 4.23 | 5.68 | 14.60 | 30.66 | 3.4 | 5.4 | 96% |
+| uniform | poisson@3.0 | continuous_unbatched | 4 | 9.15 ± 0.10 | 32.62 | 53.22 | 97.13 | 3.8 | 0.0 | 100% |
+| uniform | poisson@3.0 | sequential | 1 | 8.97 ± 0.75 | 41.76 | 46.87 | 94.20 | 1.0 | 0.0 | 100% |
+| uniform | poisson@3.0 | static | 4 | 20.10 ± 6.42 | 7.37 | 14.54 | 27.99 | 3.1 | 0.0 | 100% |
