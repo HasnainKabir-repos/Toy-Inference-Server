@@ -4,7 +4,7 @@ A small from-scratch LLM inference server (Qwen3-0.6B, PyTorch + Transformers) b
 **what batching and KV-cache management actually do to throughput and latency**. It implements four
 serving strategies and a benchmark harness that compares them under controlled conditions.
 
-The write-up is in [`paper/`](paper/). This README is the short version.
+The write-up is in [`report/`](report/). This README is the short version.
 
 ## The four strategies
 
@@ -20,14 +20,14 @@ instrumentation live in `bench/engines.py`.
 
 ## Headline results
 
-CPU, float16, batch cap B = 4, 24 requests per run. Full tables, methodology and limitations are in the paper.
+CPU, float16, batch cap B = 4, 24 requests per run. Full tables, methodology and limitations are in the report.
 
 - **Scheduling alone does not raise throughput.** `continuous_unbatched` matches `sequential` (about 9.2 tok/s) in every configuration.
 - **Batched decode roughly doubles throughput.** 1.96x (mixed output lengths) and 2.36x (uniform lengths) offline over sequential, 5 repeats.
 - **Continuous vs static depends on length variety.** On uniform lengths static is as fast or slightly faster. On mixed lengths continuous batching has about 3x lower median end-to-end latency at 2x the sequential capacity.
 - **Cache rebuild/extract costs 5 to 7% of wall time** at short (about 40-token) contexts. Long contexts were not tested.
 
-Caveats: one small model, one CPU, short prompts, 3 to 5 repeats. Several throughput intervals overlap (notably static vs continuous on mixed lengths). See the paper's limitations section.
+Caveats: one small model, one CPU, short prompts, 3 to 5 repeats. Several throughput intervals overlap (notably static vs continuous on mixed lengths). See the report's limitations section.
 
 ## Quick start
 
@@ -37,7 +37,7 @@ pip install -r requirements.txt
 # sanity check with a tiny random model (no download, takes seconds)
 python bench/bench.py --model smoke --quick --out results/smoke_check.jsonl
 
-# one real experiment (several hours on CPU; see results/README.md for the exact commands behind the paper)
+# one real experiment (several hours on CPU; see results/README.md for the exact commands behind the report)
 python bench/bench.py --model fp16 --workloads mixed --caps 4 --rates 1,2,3 --n 24 --repeats 3 --out results/my_run.jsonl
 
 # tables and figures
@@ -57,7 +57,7 @@ python bench/analyze.py results/my_run.jsonl --out results/analysis/my_run
 run.py              continuous-batching engine and KV cache manager
 bench/              benchmark harness (engines, workloads, runner, analysis, merge, diff)
 results/            raw per-run data and analysis; see results/README.md
-paper/              the write-up
+report/              the write-up
 legacy/             earlier HTTP server and metrics poller (not maintained)
 ```
 
