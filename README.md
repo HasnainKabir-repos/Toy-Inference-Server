@@ -49,7 +49,7 @@ python bench/analyze.py results/my_run.jsonl --out results/analysis/my_run
 - Every system sees the **identical, seeded request stream** in each repeat.
 - **Offline** mode: all requests at t = 0. **Open-loop** mode: Poisson arrivals at 1x/2x/3x the sequential engine's measured capacity, with latency measured from the *scheduled* arrival time (no coordinated omission).
 - Warmup, shuffled run order, repeats, greedy decoding, one JSON line per run (with metadata: versions, hardware, commit).
-- **Output-equivalence check:** every request's tokens are compared with the sequential engine's output. On a float32 tiny model the batched engines agree 100%. In float16 the batched engine agrees on 92 to 100% of requests; the divergences are at tokens 15/16 of a few specific prompts (see the paper, section 6).
+- **Output-equivalence check:** every request's tokens are compared with the sequential engine's output. On a float32 tiny model the batched engines agree 100%. In float16 the batched engine agrees on 92 to 100% of requests; the divergences are at tokens 15/16 of a few specific prompts (see the report, section 6).
 
 ## Repository layout
 

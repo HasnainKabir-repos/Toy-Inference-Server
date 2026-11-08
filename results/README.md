@@ -53,9 +53,9 @@ python bench/diff.py results/raw/final_uniform_cb.jsonl
 
 `combined_3seed.jsonl` is generated and not committed.
 
-## Which paper table comes from where
+## Which report table comes from where
 
-| Paper | Source |
+| Report | Source |
 |---|---|
 | Table 1 (offline throughput, four systems) and Table 3 (latency under load) | `analysis/combined` |
 | Table 2 (sequential vs batched, 5 repeats) and the cache-overhead numbers in section 5.4 | `analysis/final_*_cb` |
